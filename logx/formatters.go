@@ -49,6 +49,9 @@ func JSONFormatterFn(args ...AnyT) string {
     return string(body)
 }
 
+/** BaseFormatterFn
+ * Wrapper on fmt.Sprintf() used as the base formatter function
+ */
 func BaseFormatterFn(args ...AnyT) string {
     m, ok := args[0].(meta)
     if !ok {

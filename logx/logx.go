@@ -25,13 +25,14 @@ type Logger struct {
     formatter    FormatterFn
     console      bool
     wg           *sync.WaitGroup
+    pipeline     channels
 }
 
 // only Logger should be able to access
 // TODO: not implemented in 0.20.3 version
 type channels struct {
-    msg  chan<- jsonFormat
-    kill chan<- struct{}
+    msg  chan jsonFormat
+    kill chan struct{}
 }
 
 // default formatter: BaseFormatterFn [fmt.Sprintf()]
@@ -42,7 +43,43 @@ func NewLogger() *Logger {
     logger.maxLevel = logger.defaultLevel
     logger.formatter = BaseFormatterFn
     logger.wg = &sync.WaitGroup{}
+
+    // spawn a new goroutine that starts listening on the signals
+    logger.pipeline = channels{
+        msg:  make(chan jsonFormat),
+        kill: make(chan struct{}),
+    }
+
+    logger.wg.Add(1)
+    go logger.exec()
+
     return logger
+}
+
+func (log *Logger) exec() {
+    // use this for select channels
+
+    // spawned using waitgroup, so signal when done
+    defer log.wg.Done()
+
+    for {
+        select {
+        case work := <-log.pipeline.msg:
+            // register goroutine to be awaited for completion
+            log.wg.Add(1)
+            go log.log(work.meta, work.Message...)
+        case <-log.pipeline.kill:
+            // await other goroutines to finish
+            log.wg.Wait()
+
+            // TODO: Add a log line?
+            if log.fileHandler != nil {
+                log.fileHandler.Close()
+            }
+            break
+        }
+    }
+
 }
 
 func (log *Logger) ConsoleOut(flag bool) *Logger {
@@ -92,18 +129,12 @@ func (log *Logger) AddFileHandler(location, name string) *Logger {
 }
 
 func (log *Logger) Close() error {
-    // wait for all writes to end
-    // TODO: use kill channel
-    log.wg.Wait()
-
-    if log.fileHandler != nil {
-        return log.fileHandler.Close()
-    }
+    log.pipeline.kill <- struct{}{}
     return nil
 }
 
 func (log *Logger) log(m meta, args ...AnyT) error {
-    // this is always called in a goroutine
+    // spawned using waitgroup, so signal when done
     defer log.wg.Done()
 
     as_ := AnyList{m}
@@ -132,7 +163,6 @@ func (log *Logger) log(m meta, args ...AnyT) error {
 }
 
 func (log *Logger) controller(level string, args ...AnyT) error {
-    // use this for select channels
     m := meta{
         Timestamp: time.Now().Format(TIME_FORMAT),
         Level:     level,
@@ -144,8 +174,10 @@ func (log *Logger) controller(level string, args ...AnyT) error {
         m.CallerLine = n
     }
 
-    log.wg.Add(1)
-    go log.log(m, args...)
+    log.pipeline.msg <- jsonFormat{
+        meta:    m,
+        Message: args,
+    }
 
     return nil
 }

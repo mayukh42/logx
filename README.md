@@ -8,17 +8,25 @@ Custom formatters are supported. See logx/formatters/JSONFormatterFn for example
 
 ## Features in pipeline
 
-Signals (Channels)
+* Signals (Channels)
 
-Custom Writers 
+* Custom Writers - can even be used for pushing logs to an external system
 
-More Custom Formatters OOTB
+* More Custom Formatters OOTB
 
 ## History
 
-0.20.3 (Initial Release)
+### 0.20.4 
 
-Initial (0.20.3) version does not implement signals. It uses sync.WaitGroup{}
+* Channels and Signals
+
+(Inspired by Michael Van Sickle's codecamp (https://www.youtube.com/watch?v=YS4e4q9oBaU&t=21910s))
+
+* Caller stack support
+
+### 0.20.3 (Initial Release)
+
+Initial version does not implement signals. It uses sync.WaitGroup{} only
 
 ## Packages Overview
 
@@ -28,7 +36,9 @@ logx
 
 # Examples
 
-Refer tests. 
+Refer tests
+
+TODO: Add more tests
 
 # Usage 
 
