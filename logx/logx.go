@@ -4,6 +4,8 @@ import (
     "errors"
     "fmt"
     "os"
+    "path/filepath"
+    "runtime"
     "strings"
     "sync"
     "time"
@@ -32,13 +34,13 @@ type channels struct {
     kill chan<- struct{}
 }
 
-// default formatter: fmt.Sprintf()
+// default formatter: BaseFormatterFn [fmt.Sprintf()]
 func NewLogger() *Logger {
     logger := new(Logger)
     logger.defaultLevel = INFO
     logger.timeFormat = TIME_FORMAT
     logger.maxLevel = logger.defaultLevel
-    logger.formatter = fmt.Sprintf
+    logger.formatter = BaseFormatterFn
     logger.wg = &sync.WaitGroup{}
     return logger
 }
@@ -100,19 +102,16 @@ func (log *Logger) Close() error {
     return nil
 }
 
-func (log *Logger) log(level string, args ...AnyT) error {
+func (log *Logger) log(m meta, args ...AnyT) error {
     // this is always called in a goroutine
     defer log.wg.Done()
 
-    now := time.Now().Format(TIME_FORMAT)
-    // TODO: custom formatting
-    fs := formattedString(len(args))
-    as_ := AnyList{now, level}
+    as_ := AnyList{m}
     for _, a := range args {
         as_ = append(as_, a)
     }
 
-    content := log.formatter(fs, as_...)
+    content := log.formatter(as_...)
     if content == "" {
         return errors.New("Nothing to log")
     }
@@ -132,18 +131,34 @@ func (log *Logger) log(level string, args ...AnyT) error {
     return nil
 }
 
+func (log *Logger) controller(level string, args ...AnyT) error {
+    // use this for select channels
+    m := meta{
+        Timestamp: time.Now().Format(TIME_FORMAT),
+        Level:     level,
+    }
+
+    // Add caller info
+    if _, f, n, ok := runtime.Caller(2); ok {
+        m.CallerFile = filepath.Base(f)
+        m.CallerLine = n
+    }
+
+    log.wg.Add(1)
+    go log.log(m, args...)
+
+    return nil
+}
+
 func (log *Logger) Errorf(args ...AnyT) error {
     // Errorf is always logged
-    log.wg.Add(1)
-    go log.log(ERROR, args...)
-
+    log.controller(ERROR, args...)
     return nil
 }
 
 func (log *Logger) Infof(args ...AnyT) error {
     if LEVEL[INFO] <= LEVEL[log.maxLevel] {
-        log.wg.Add(1)
-        go log.log(INFO, args...)
+        log.controller(INFO, args...)
     }
 
     return nil
@@ -151,8 +166,7 @@ func (log *Logger) Infof(args ...AnyT) error {
 
 func (log *Logger) Debugf(args ...AnyT) error {
     if LEVEL[DEBUG] <= LEVEL[log.maxLevel] {
-        log.wg.Add(1)
-        go log.log(DEBUG, args...)
+        log.controller(DEBUG, args...)
     }
 
     return nil

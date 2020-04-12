@@ -2,15 +2,22 @@ package logx
 
 import (
     "encoding/json"
+    "fmt"
 )
 
-type FormatterFn func(string, ...interface{}) string
+type FormatterFn func(...AnyT) string
+
+type meta struct {
+    Timestamp  string `json:"timestamp"`
+    Level      string `json:"level"`
+    CallerFile string `json:"file,omitempty"`
+    CallerLine int    `json:"line,omitempty"`
+}
 
 // TODO: Add caller and line
 type jsonFormat struct {
-    Timestamp string        `json:"timestamp"`
-    Level     string        `json:"level"`
-    Message   []interface{} `json:"message"`
+    meta
+    Message []AnyT `json:"message"`
 }
 
 /** JSONFormatter()
@@ -19,15 +26,19 @@ type jsonFormat struct {
  * yields
  * 	{"timestamp": "2020-04-03 22:11:20.246", "level": "INFO", "message": ["line_message", "the", "answer", "is", 42]}
  */
-func JSONFormatterFn(msg string, args ...interface{}) string {
+func JSONFormatterFn(args ...AnyT) string {
     if len(args) < 2 {
         return ""
     }
 
+    m, ok := args[0].(meta)
+    if !ok {
+        return ""
+    }
+
     jf := &jsonFormat{
-        Timestamp: args[0].(string),
-        Level:     args[1].(string),
-        Message:   args[2:],
+        Message: args[1:],
+        meta:    m,
     }
 
     body, err := json.Marshal(jf)
@@ -36,4 +47,19 @@ func JSONFormatterFn(msg string, args ...interface{}) string {
     }
 
     return string(body)
+}
+
+func BaseFormatterFn(args ...AnyT) string {
+    m, ok := args[0].(meta)
+    if !ok {
+        return ""
+    }
+
+    _as := AnyList{m.Timestamp, m.Level, m.CallerFile, m.CallerLine}
+    fs := formattedString(len(_as) + len(args) - 1)
+
+    for _, a := range args[1:] {
+        _as = append(_as, a)
+    }
+    return fmt.Sprintf(fs, _as...)
 }

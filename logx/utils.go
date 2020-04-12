@@ -42,10 +42,9 @@ func createFileHandler(location, name string) (*os.File, error) {
 
 func formattedString(n int) string {
     var buf strings.Builder
-    buf.WriteString("%s [%s] ")
-    for i := 0; i < n; i++ {
+    buf.WriteString("%s [%s] %s:%d ")
+    for i := 0; i < n-4; i++ {
         buf.WriteString("%v ")
     }
-    buf.WriteString("\n")
     return buf.String()
 }
